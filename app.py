@@ -30,7 +30,7 @@ if boton_añadir:
         tarea_estructurada = {
             "descripcion": nueva_tarea,
             "completada": False,
-            "responsable": "Sin asignar" #empezamos sin nadie asignado
+            "responsable": "Sin asignar", #empezamos sin nadie asignado
             "fecha": str(fecha_limite), #convertimos a texto
             "hora": str(hora_limite) #convertimos a texto
         }
