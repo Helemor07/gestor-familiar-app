@@ -22,7 +22,7 @@ with st.form(key="formulario_tareas", clear_on_submit=True):
         hora_limite = st.time_input("Hora límite")
 
 #Botón para añadir
-boton_añadir = ("Añadir tarea nueva")
+boton_añadir = st.form_submit_button("Añadir tarea nueva")
 
 if boton_añadir:
     if nueva_tarea != "":
