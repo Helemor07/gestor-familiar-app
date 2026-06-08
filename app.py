@@ -20,23 +20,22 @@ with st.form(key="formulario_tareas", clear_on_submit=True):
         fecha_limite = st.date_input("Fecha límite")
     with col_hora:
         hora_limite = st.time_input("Hora límite")
+        #Botón para añadir
+    boton_añadir = st.form_submit_button("Añadir tarea nueva")
 
-#Botón para añadir
-boton_añadir = st.form_submit_button("Añadir tarea nueva")
-
-if boton_añadir:
-    if nueva_tarea != "":
-        # creamos el diccionario
-        tarea_estructurada = {
-            "descripcion": nueva_tarea,
-            "completada": False,
-            "responsable": "Sin asignar", #empezamos sin nadie asignado
-            "fecha": str(fecha_limite), #convertimos a texto
-            "hora": str(hora_limite) #convertimos a texto
-        }
+    if boton_añadir:
+        if nueva_tarea != "":
+            # creamos el diccionario
+            tarea_estructurada = {
+                 "descripcion": nueva_tarea,
+                 "completada": False,
+                 "responsable": "Sin asignar", #empezamos sin nadie asignado
+                 "fecha": str(fecha_limite), #convertimos a texto
+                 "hora": str(hora_limite) #convertimos a texto
+            }
         # añadimos el diccionario (NO EL TEXTO SUELTO)
-        st.session_state.lista_tareas.append(tarea_estructurada)
-        st.success(f"¡Has añadido: '{nueva_tarea}' a la lista!")
+            st.session_state.lista_tareas.append(tarea_estructurada)
+            st.success(f"¡Has añadido: '{nueva_tarea}' a la lista!")
 #-----------------------------------------------------------------------
 st.subheader("Tareas pendientes:")
 
