@@ -124,4 +124,119 @@ else:
                         "codigo_familia": st.session_state.codigo_familia
                     }
                     supabase.table("tareas").insert(datos_tarea).execute()
-                    st.success("¡La tarea
+                    st.success("¡La tarea ha sido guardada y se puede ver en la pestaña 'Ver Tareas'!")
+
+    # ==========================================
+    # PESTAÑA 2: VISUALIZACIÓN Y FILTRADO
+    # ==========================================
+    with tab_ver:
+        filtro = st.radio("Filtro de visualización:", ["Mostrar todas las tareas de la familia", "Solo las tareas que me tocan a mí"], horizontal=True)
+        st.write("") 
+
+        # NUEVO: Lógica del mensajero de notificaciones
+        if st.session_state.notificacion_ver:
+            st.success(st.session_state.notificacion_ver)
+            st.session_state.notificacion_ver = None # Borramos el aviso para que no vuelva a salir
+
+        respuesta = supabase.table("tareas").select("*").eq("codigo_familia", st.session_state.codigo_familia).execute()
+        lista_tareas = respuesta.data
+
+        if filtro == "Solo las tareas que me tocan a mí":
+            lista_tareas = [t for t in lista_tareas if t["responsable"] == st.session_state.usuario_actual]
+
+        def dibujar_tarea(tarea):
+            if not tarea["completada"]:
+                col_info, col_accion = st.columns([4, 1])
+                
+                with col_info:
+                    responsable_tag = f" 👤 {tarea['responsable']}" if tarea['responsable'] != "Sin asignar" else " ⚠️ Sin asignar"
+                    st.write(f"**{tarea['descripcion']}** ({responsable_tag})")
+                    
+                    tiempo_texto = ""
+                    if tarea['fecha'] != "Sin fecha":
+                        tiempo_texto += f"📅 {tarea['fecha']} "
+                    if tarea['hora'] != "Sin hora":
+                        tiempo_texto += f"⏰ {tarea['hora']}"
+                    if tiempo_texto != "":
+                        st.caption(tiempo_texto)
+
+                with col_accion:
+                    if st.button("✅ Hecho", key=f"hecho_{tarea['id']}"):
+                        supabase.table("tareas").update({"completada": True}).eq("id", tarea["id"]).execute()
+                        st.session_state.notificacion_ver = "¡Genial! Tarea marcada como completada."
+                        st.rerun() 
+                
+                with st.expander("✏️ Modificar / Eliminar"):
+                    n_desc = st.text_input("Editar descripción:", value=tarea["descripcion"], key=f"ed_{tarea['id']}")
+                    
+                    try:
+                        idx_resp = lista_edicion.index(tarea["responsable"])
+                    except ValueError:
+                        idx_resp = 0
+                    n_resp = st.selectbox("Cambiar responsable:", lista_edicion, index=idx_resp, key=f"er_{tarea['id']}")
+                    
+                    st.write("Ajustar límites de tiempo:")
+                    col_ef, col_eh = st.columns(2)
+                    
+                    with col_ef:
+                        e_tiene_f = st.checkbox("Tiene fecha", value=(tarea["fecha"] != "Sin fecha"), key=f"etf_{tarea['id']}")
+                        try:
+                            val_f = datetime.datetime.strptime(tarea["fecha"], "%Y-%m-%d").date()
+                        except:
+                            val_f = datetime.date.today()
+                        n_fecha = st.date_input("Nueva fecha", value=val_f, key=f"nf_{tarea['id']}") if e_tiene_f else "Sin fecha"
+                    
+                    with col_eh:
+                        e_tiene_h = st.checkbox("Tiene hora", value=(tarea["hora"] != "Sin hora"), key=f"eth_{tarea['id']}")
+                        try:
+                            val_h = datetime.datetime.strptime(tarea["hora"], "%H:%M:%S").time()
+                        except:
+                            val_h = datetime.time(12, 0)
+                        n_hora = st.time_input("Nueva hora", value=val_h, key=f"nh_{tarea['id']}") if e_tiene_h else "Sin hora"
+                    
+                    st.write("")
+                    col_b1, col_b2 = st.columns(2)
+                    with col_b1:
+                        if st.button("💾 Guardar Cambios", key=f"bsave_{tarea['id']}", use_container_width=True):
+                            cambios = {
+                                "descripcion": n_desc,
+                                "responsable": n_resp if n_resp != "Selecciona..." else "Sin asignar",
+                                "fecha": str(n_fecha) if e_tiene_f else "Sin fecha",
+                                "hora": str(n_hora) if e_tiene_h else "Sin hora"
+                            }
+                            supabase.table("tareas").update(cambios).eq("id", tarea["id"]).execute()
+                            # AQUÍ LE ENTREGAMOS EL MENSAJE AL MENSAJERO
+                            st.session_state.notificacion_ver = "¡Modificación guardada con éxito!"
+                            st.rerun()
+                            
+                    with col_b2:
+                        confirm_key = f"confirmar_borrado_{tarea['id']}"
+                        
+                        if confirm_key not in st.session_state:
+                            st.session_state[confirm_key] = False
+                            
+                        if not st.session_state[confirm_key]:
+                            if st.button("🗑️ Eliminar Tarea", key=f"bdel_{tarea['id']}", use_container_width=True):
+                                st.session_state[confirm_key] = True 
+                                st.rerun()
+                        else:
+                            st.error("⚠️ ¿Borrar definitivamente?")
+                            col_yes, col_no = st.columns(2)
+                            with col_yes:
+                                if st.button("Sí", key=f"byes_{tarea['id']}", use_container_width=True):
+                                    supabase.table("tareas").delete().eq("id", tarea["id"]).execute()
+                                    st.session_state[confirm_key] = False 
+                                    st.session_state.notificacion_ver = "Tarea eliminada correctamente."
+                                    st.rerun()
+                            with col_no:
+                                if st.button("No", key=f"bno_{tarea['id']}", use_container_width=True):
+                                    st.session_state[confirm_key] = False 
+                                    st.rerun()
+                st.divider()
+
+        tareas_pendientes = [t for t in lista_tareas if not t["completada"]]
+        if len(tareas_pendientes) == 0:
+            st.info("No hay tareas pendientes en esta vista. ¡Todo al día! 🎉")
+        else:
+            for tarea in tareas_pendientes:
+                dibujar_tarea(tarea)
