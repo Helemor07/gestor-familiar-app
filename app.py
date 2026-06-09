@@ -1,5 +1,6 @@
 import streamlit as st
 from supabase import create_client, Client
+import datetime
 
 # --- 1. CONEXIÓN A LA BASE DE DATOS ---
 @st.cache_resource
@@ -12,7 +13,7 @@ supabase = iniciar_conexion()
 
 st.title("LA ia.IA MODERNA")
 
-# --- 2. MEMORIA DE SESIÓN (Solo para saber si estamos logueados) ---
+# --- 2. MEMORIA DE SESIÓN ---
 if 'usuario_actual' not in st.session_state:
     st.session_state.usuario_actual = None 
 if 'codigo_familia' not in st.session_state:
@@ -24,10 +25,8 @@ if 'codigo_familia' not in st.session_state:
 if st.session_state.usuario_actual is None:
     st.write("Bienvenid@ a la aplicación de organización para la familia")
     
-    # 1. Pedimos la llave de la casa primero
     codigo_ingresado = st.text_input("🔑 Código de Familia (ej. Garcia2026):", type="password")
     
-    # 2. Si escriben un código, descargamos la lista de familiares de la nube
     if codigo_ingresado:
         resp_miembros = supabase.table("miembros").select("nombre").eq("codigo_familia", codigo_ingresado).execute()
         nombres_bd = [m["nombre"] for m in resp_miembros.data]
@@ -54,7 +53,6 @@ if st.session_state.usuario_actual is None:
 
             if st.button("Registrar y Entrar", key="btn_registrar"):
                 if nuevo_familiar != "":
-                    # Lo guardamos en la NUBE para que el resto de móviles lo vean
                     if nuevo_familiar not in nombres_bd:
                         supabase.table("miembros").insert({
                             "nombre": nuevo_familiar, 
@@ -71,96 +69,149 @@ if st.session_state.usuario_actual is None:
 # PANTALLA 2: GESTOR DE TAREAS AVANZADO
 #----------------------------------------------------------------------
 else:
-    st.write(f"¡Hola, **{st.session_state.usuario_actual}**! Estás en la sala: **{st.session_state.codigo_familia}**")
-
-    if st.button("Cerrar sesión"):
-        st.session_state.usuario_actual = None
-        st.session_state.codigo_familia = None
-        st.rerun() 
+    # Cabecera superior
+    col_header1, col_header2 = st.columns([3, 1])
+    with col_header1:
+        st.write(f"¡Hola, **{st.session_state.usuario_actual}**! Sala: **{st.session_state.codigo_familia}**")
+    with col_header2:
+        if st.button("Cerrar sesión"):
+            st.session_state.usuario_actual = None
+            st.session_state.codigo_familia = None
+            st.rerun() 
     
-    # --- FORMULARIO CON FECHAS OPCIONALES ---
-    with st.form(key="formulario_tareas", clear_on_submit=True):
-        nueva_tarea = st.text_input("¿Qué necesitamos hacer?")
-        
-        # Una casilla para decidir si queremos ponerle límite o es una compra general
-        tiene_fecha = st.checkbox("⏰ Esta tarea tiene una fecha/hora límite")
+    st.divider()
 
-        col_fecha, col_hora = st.columns(2)
-        with col_fecha:
-            fecha_limite = st.date_input("Fecha límite")
-        with col_hora:
-            hora_limite = st.time_input("Hora límite")
+    # NUEVO: Organización en dos pestañas principales
+    tab_añadir, tab_ver = st.tabs(["➕ Añadir Tarea", "📋 Ver Tareas"])
+
+    # ==========================================
+    # PESTAÑA 1: FORMULARIO DE CREACIÓN
+    # ==========================================
+    with tab_añadir:
+        st.subheader("Crear una nueva tarea")
+        with st.form(key="formulario_tareas", clear_on_submit=True):
+            nueva_tarea = st.text_input("¿Qué necesitamos hacer?")
             
-        boton_añadir = st.form_submit_button("Añadir tarea")
+            # Casillas independientes para decidir si queremos usar el calendario/reloj
+            col_f_check, col_h_check = st.columns(2)
+            with col_f_check:
+                tiene_fecha = st.checkbox("📅 Poner fecha límite")
+            with col_h_check:
+                tiene_hora = st.checkbox("⏰ Poner hora límite")
 
-        if boton_añadir:
-            if nueva_tarea != "":
-                # Si han marcado la casilla, guardamos la fecha. Si no, guardamos un texto aviso.
-                fecha_str = str(fecha_limite) if tiene_fecha else "Sin fecha"
-                hora_str = str(hora_limite) if tiene_fecha else "Sin hora"
+            col_fecha, col_hora = st.columns(2)
+            with col_fecha:
+                fecha_limite = st.date_input("Fecha") if tiene_fecha else None
+            with col_hora:
+                hora_limite = st.time_input("Hora") if tiene_hora else None
                 
-                datos_tarea = {
-                     "descripcion": nueva_tarea,
-                     "completada": False,
-                     "responsable": "Sin asignar", 
-                     "fecha": fecha_str, 
-                     "hora": hora_str,
-                     "codigo_familia": st.session_state.codigo_familia
-                }
-                supabase.table("tareas").insert(datos_tarea).execute()
-                st.success("¡Tarea añadida a vuestra lista!")
-                st.rerun() 
+            boton_añadir = st.form_submit_button("Añadir tarea a la base de datos")
+
+            if boton_añadir:
+                if nueva_tarea != "":
+                    datos_tarea = {
+                        "descripcion": nueva_tarea,
+                        "completada": False,
+                        "responsable": "Sin asignar", 
+                        "fecha": str(fecha_limite) if tiene_fecha else "Sin fecha", 
+                        "hora": str(hora_limite) if tiene_hora else "Sin hora",
+                        "codigo_familia": st.session_state.codigo_familia
+                    }
+                    supabase.table("tareas").insert(datos_tarea).execute()
+                    st.success("¡Tarea añadida correctamente! Ve a la pestaña 'Ver Tareas' para revisarla.")
+
+    # ==========================================
+    # PESTAÑA 2: VISUALIZACIÓN Y FILTRADO
+    # ==========================================
+    with tab_ver:
+        # 1. Sistema de filtrado visual
+        filtro = st.radio("Filtro de visualización:", ["Mostrar todas las tareas de la familia", "Solo las tareas que me tocan a mí"], horizontal=True)
+        st.write("") # Espaciador
+
+        # 2. Descargar datos de la nube
+        resp_miembros = supabase.table("miembros").select("nombre").eq("codigo_familia", st.session_state.codigo_familia).execute()
+        lista_familiares_actual = ["Selecciona...", "Sin asignar"] + [m["nombre"] for m in resp_miembros.data]
+
+        respuesta = supabase.table("tareas").select("*").eq("codigo_familia", st.session_state.codigo_familia).execute()
+        lista_tareas = respuesta.data
+
+        # 3. Aplicar el filtro seleccionado
+        if filtro == "Solo las tareas que me tocan a mí":
+            lista_tareas = [t for t in lista_tareas if t["responsable"] == st.session_state.usuario_actual]
+
+        # 4. Función para dibujar cada tarea con sus opciones de edición/borrado
+        def dibujar_tarea(tarea):
+            if not tarea["completada"]:
+                col_info, col_accion = st.columns([4, 1])
                 
-    st.subheader("Tareas pendientes:")
+                with col_info:
+                    responsable_tag = f" 👤 {tarea['responsable']}" if tarea['responsable'] != "Sin asignar" else " ⚠️ Sin asignar"
+                    st.write(f"**{tarea['descripcion']}** ({responsable_tag})")
+                    
+                    tiempo_texto = ""
+                    if tarea['fecha'] != "Sin fecha":
+                        tiempo_texto += f"📅 {tarea['fecha']} "
+                    if tarea['hora'] != "Sin hora":
+                        tiempo_texto += f"⏰ {tarea['hora']}"
+                    if tiempo_texto != "":
+                        st.caption(tiempo_texto)
 
-    # --- DESCARGAMOS LOS NOMBRES ACTUALIZADOS PARA PODER ASIGNAR ---
-    resp_miembros = supabase.table("miembros").select("nombre").eq("codigo_familia", st.session_state.codigo_familia).execute()
-    lista_familiares_actual = ["Selecciona..."] + [m["nombre"] for m in resp_miembros.data]
-
-    # --- LEER DESDE LA NUBE ---
-    respuesta = supabase.table("tareas").select("*").eq("codigo_familia", st.session_state.codigo_familia).execute()
-    
-    for tarea in respuesta.data:
-        if not tarea["completada"]:
-            col1, col2, col3 = st.columns([3, 2, 1])
-
-            with col1:
-                st.write(f"**{tarea['descripcion']}**")
-                # Solo mostramos los relojes si realmente tiene fecha
-                if tarea['fecha'] != "Sin fecha":
-                    st.caption(f"📅 {tarea['fecha']} ⏰ {tarea['hora']}")
-                else:
-                    st.caption("Libre de horario")
-
-            with col2:
-                if tarea["responsable"] == "Sin asignar": 
-                    seleccion = st.selectbox ("¿Quién va?", lista_familiares_actual, key=f"asignar_{tarea['id']}")
-                    if seleccion != "Selecciona...":
-                        supabase.table("tareas").update({"responsable": seleccion}).eq("id", tarea["id"]).execute()
+                with col_accion:
+                    if st.button("✅ Hecho", key=f"hecho_{tarea['id']}"):
+                        supabase.table("tareas").update({"completada": True}).eq("id", tarea["id"]).execute()
                         st.rerun() 
-                else:
-                    st.info(f"{tarea['responsable']}")
-
-            with col3:
-                if st.button("✅ Hecho", key=f"hecho_{tarea['id']}"):
-                    supabase.table("tareas").update({"completada": True}).eq("id", tarea["id"]).execute()
-                    st.rerun() 
-            
-            # --- NUEVO: MENÚ DESPLEGABLE PARA MODIFICAR FECHAS ---
-            # Si se cambia una cita médica, pueden abrir este panel y editarla
-            with st.expander("✏️ Editar fecha/hora"):
-                col_f, col_h, col_b = st.columns(3)
-                with col_f:
-                    n_fecha = st.date_input("Nueva fecha", key=f"nf_{tarea['id']}")
-                with col_h:
-                    n_hora = st.time_input("Nueva hora", key=f"nh_{tarea['id']}")
-                with col_b:
-                    st.write("") # Espaciador para alinear el botón con las cajas
-                    if st.button("Guardar cambios", key=f"bsave_{tarea['id']}"):
-                        supabase.table("tareas").update({"fecha": str(n_fecha), "hora": str(n_hora)}).eq("id", tarea["id"]).execute()
-                        st.rerun()
                 
-                # Botón de rescate por si quieren quitarle la fecha a una tarea que ya la tenía
-                if st.button("Quitar límite de tiempo", key=f"bquit_{tarea['id']}"):
-                    supabase.table("tareas").update({"fecha": "Sin fecha", "hora": "Sin hora"}).eq("id", tarea["id"]).execute()
-                    st.rerun()
+                # PANEL DE EDICIÓN Y BORRADO
+                with st.expander("✏️ Modificar / Eliminar"):
+                    n_desc = st.text_input("Editar descripción:", value=tarea["descripcion"], key=f"ed_{tarea['id']}")
+                    
+                    try:
+                        idx_resp = lista_familiares_actual.index(tarea["responsable"])
+                    except ValueError:
+                        idx_resp = 0
+                    n_resp = st.selectbox("Cambiar responsable:", lista_familiares_actual, index=idx_resp, key=f"er_{tarea['id']}")
+                    
+                    st.write("Ajustar límites de tiempo:")
+                    col_ef, col_eh = st.columns(2)
+                    
+                    with col_ef:
+                        e_tiene_f = st.checkbox("Tiene fecha", value=(tarea["fecha"] != "Sin fecha"), key=f"etf_{tarea['id']}")
+                        try:
+                            val_f = datetime.datetime.strptime(tarea["fecha"], "%Y-%m-%d").date()
+                        except:
+                            val_f = datetime.date.today()
+                        n_fecha = st.date_input("Nueva fecha", value=val_f, key=f"nf_{tarea['id']}") if e_tiene_f else "Sin fecha"
+                    
+                    with col_eh:
+                        e_tiene_h = st.checkbox("Tiene hora", value=(tarea["hora"] != "Sin hora"), key=f"eth_{tarea['id']}")
+                        try:
+                            val_h = datetime.datetime.strptime(tarea["hora"], "%H:%M:%S").time()
+                        except:
+                            val_h = datetime.time(12, 0)
+                        n_hora = st.time_input("Nueva hora", value=val_h, key=f"nh_{tarea['id']}") if e_tiene_h else "Sin hora"
+                    
+                    st.write("")
+                    col_b1, col_b2 = st.columns(2)
+                    with col_b1:
+                        if st.button("💾 Guardar Cambios", key=f"bsave_{tarea['id']}", use_container_width=True):
+                            cambios = {
+                                "descripcion": n_desc,
+                                "responsable": n_resp if n_resp != "Selecciona..." else "Sin asignar",
+                                "fecha": str(n_fecha) if e_tiene_f else "Sin fecha",
+                                "hora": str(n_hora) if e_tiene_h else "Sin hora"
+                            }
+                            supabase.table("tareas").update(cambios).eq("id", tarea["id"]).execute()
+                            st.rerun()
+                    with col_b2:
+                        if st.button("🗑️ Eliminar Tarea", key=f"bdel_{tarea['id']}", use_container_width=True):
+                            supabase.table("tareas").delete().eq("id", tarea["id"]).execute()
+                            st.rerun()
+                st.divider()
+
+        # 5. Renderizar las tareas o mostrar mensaje si la lista está vacía
+        tareas_pendientes = [t for t in lista_tareas if not t["completada"]]
+        if len(tareas_pendientes) == 0:
+            st.info("No hay tareas pendientes en esta vista. ¡Todo al día! 🎉")
+        else:
+            for tarea in tareas_pendientes:
+                dibujar_tarea(tarea)
