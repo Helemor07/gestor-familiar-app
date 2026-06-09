@@ -82,7 +82,6 @@ else:
     st.divider()
 
     # --- CONSULTA CENTRALIZADA DE MIEMBROS ---
-    # Colocamos esto aquí arriba para que AMBAS pestañas conozcan la lista de familiares actualizada
     resp_miembros = supabase.table("miembros").select("nombre").eq("codigo_familia", st.session_state.codigo_familia).execute()
     lista_familiares_actual = ["Sin asignar"] + [m["nombre"] for m in resp_miembros.data]
     lista_edicion = ["Selecciona...", "Sin asignar"] + [m["nombre"] for m in resp_miembros.data]
@@ -91,14 +90,13 @@ else:
     tab_añadir, tab_ver = st.tabs(["➕ Añadir Tarea", "📋 Ver Tareas"])
 
     # ==========================================
-    # PESTAÑA 1: FORMULARIO DE CREACIÓN (CON ASIGNACIÓN COMPLETA)
+    # PESTAÑA 1: FORMULARIO DE CREACIÓN
     # ==========================================
     with tab_añadir:
         st.subheader("Crear una nueva tarea")
         with st.form(key="formulario_tareas", clear_on_submit=True):
             nueva_tarea = st.text_input("¿Qué necesitamos hacer?")
             
-            # NUEVO: Selector para asignar responsable desde el primer momento
             quien_lo_hace = st.selectbox("👤 ¿Quién se encargará de esta tarea?", lista_familiares_actual)
             
             st.write("¿Quieres añadir límites de tiempo? (Modifica y marca la casilla para activarlos)")
@@ -120,32 +118,29 @@ else:
                     datos_tarea = {
                         "descripcion": nueva_tarea,
                         "completada": False,
-                        "responsable": quien_lo_hace, # GUARDAMOS EL NOMBRE SELECCIONADO
+                        "responsable": quien_lo_hace,
                         "fecha": str(fecha_limite) if tiene_fecha else "Sin fecha", 
                         "hora": str(hora_limite) if tiene_hora else "Sin hora",
                         "codigo_familia": st.session_state.codigo_familia
                     }
                     supabase.table("tareas").insert(datos_tarea).execute()
-                    st.success(f"¡Tarea '{nueva_tarea}' asignada a {quien_lo_hace} con éxito!")
-                    st.rerun()
+                    
+                    # AQUÍ ESTÁ LA MAGIA: st.success sin el st.rerun() después
+                    st.success("¡La tarea ha sido guardada y se puede ver en la pestaña 'Ver Tareas'!")
 
     # ==========================================
     # PESTAÑA 2: VISUALIZACIÓN Y FILTRADO
     # ==========================================
     with tab_ver:
-        # 1. Sistema de filtrado visual
         filtro = st.radio("Filtro de visualización:", ["Mostrar todas las tareas de la familia", "Solo las tareas que me tocan a mí"], horizontal=True)
         st.write("") 
 
-        # 2. Descargar tareas de la nube
         respuesta = supabase.table("tareas").select("*").eq("codigo_familia", st.session_state.codigo_familia).execute()
         lista_tareas = respuesta.data
 
-        # 3. Aplicar el filtro seleccionado
         if filtro == "Solo las tareas que me tocan a mí":
             lista_tareas = [t for t in lista_tareas if t["responsable"] == st.session_state.usuario_actual]
 
-        # 4. Función para dibujar cada tarea
         def dibujar_tarea(tarea):
             if not tarea["completada"]:
                 col_info, col_accion = st.columns([4, 1])
@@ -167,7 +162,6 @@ else:
                         supabase.table("tareas").update({"completada": True}).eq("id", tarea["id"]).execute()
                         st.rerun() 
                 
-                # PANEL DE EDICIÓN Y BORRADO
                 with st.expander("✏️ Modificar / Eliminar"):
                     n_desc = st.text_input("Editar descripción:", value=tarea["descripcion"], key=f"ed_{tarea['id']}")
                     
@@ -214,7 +208,6 @@ else:
                             st.rerun()
                 st.divider()
 
-        # 5. Renderizar las tareas
         tareas_pendientes = [t for t in lista_tareas if not t["completada"]]
         if len(tareas_pendientes) == 0:
             st.info("No hay tareas pendientes en esta vista. ¡Todo al día! 🎉")
