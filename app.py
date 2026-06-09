@@ -81,30 +81,30 @@ else:
     
     st.divider()
 
-    # NUEVO: Organización en dos pestañas principales
+    # Organización en dos pestañas principales
     tab_añadir, tab_ver = st.tabs(["➕ Añadir Tarea", "📋 Ver Tareas"])
 
     # ==========================================
-    # PESTAÑA 1: FORMULARIO DE CREACIÓN
+    # PESTAÑA 1: FORMULARIO DE CREACIÓN (SOLUCIONADO)
     # ==========================================
     with tab_añadir:
         st.subheader("Crear una nueva tarea")
         with st.form(key="formulario_tareas", clear_on_submit=True):
             nueva_tarea = st.text_input("¿Qué necesitamos hacer?")
             
-            # Casillas independientes para decidir si queremos usar el calendario/reloj
-            col_f_check, col_h_check = st.columns(2)
-            with col_f_check:
-                tiene_fecha = st.checkbox("📅 Poner fecha límite")
-            with col_h_check:
-                tiene_hora = st.checkbox("⏰ Poner hora límite")
-
+            st.write("¿Quieres añadir límites de tiempo? (Modifica y marca la casilla para activarlos)")
             col_fecha, col_hora = st.columns(2)
+            
             with col_fecha:
-                fecha_limite = st.date_input("Fecha") if tiene_fecha else None
-            with col_hora:
-                hora_limite = st.time_input("Hora") if tiene_hora else None
+                fecha_limite = st.date_input("Selecciona Fecha")
+                tiene_fecha = st.checkbox("📅 Activar y guardar esta fecha")
                 
+            with col_hora:
+                # Ponemos un valor por defecto cómodo (las 12:00) por si acaso
+                hora_limite = st.time_input("Selecciona Hora", value=datetime.time(12, 0))
+                tiene_hora = st.checkbox("⏰ Activar y guardar esta hora")
+                
+            st.write("")
             boton_añadir = st.form_submit_button("Añadir tarea a la base de datos")
 
             if boton_añadir:
@@ -118,7 +118,7 @@ else:
                         "codigo_familia": st.session_state.codigo_familia
                     }
                     supabase.table("tareas").insert(datos_tarea).execute()
-                    st.success("¡Tarea añadida correctamente! Ve a la pestaña 'Ver Tareas' para revisarla.")
+                    st.success("¡Tarea añadida correctamente! Ya puedes verla en la pestaña 'Ver Tareas'.")
 
     # ==========================================
     # PESTAÑA 2: VISUALIZACIÓN Y FILTRADO
@@ -126,7 +126,7 @@ else:
     with tab_ver:
         # 1. Sistema de filtrado visual
         filtro = st.radio("Filtro de visualización:", ["Mostrar todas las tareas de la familia", "Solo las tareas que me tocan a mí"], horizontal=True)
-        st.write("") # Espaciador
+        st.write("") 
 
         # 2. Descargar datos de la nube
         resp_miembros = supabase.table("miembros").select("nombre").eq("codigo_familia", st.session_state.codigo_familia).execute()
@@ -139,7 +139,7 @@ else:
         if filtro == "Solo las tareas que me tocan a mí":
             lista_tareas = [t for t in lista_tareas if t["responsable"] == st.session_state.usuario_actual]
 
-        # 4. Función para dibujar cada tarea con sus opciones de edición/borrado
+        # 4. Función para dibujar cada tarea
         def dibujar_tarea(tarea):
             if not tarea["completada"]:
                 col_info, col_accion = st.columns([4, 1])
@@ -208,7 +208,7 @@ else:
                             st.rerun()
                 st.divider()
 
-        # 5. Renderizar las tareas o mostrar mensaje si la lista está vacía
+        # 5. Renderizar las tareas
         tareas_pendientes = [t for t in lista_tareas if not t["completada"]]
         if len(tareas_pendientes) == 0:
             st.info("No hay tareas pendientes en esta vista. ¡Todo al día! 🎉")
