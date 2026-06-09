@@ -66,7 +66,7 @@ if st.session_state.usuario_actual is None:
                     st.warning("Escribe tu nombre primero.")
 
 #----------------------------------------------------------------------
-# PANTALLA 2: GESTOR DE TAREAS AVANZADO
+# PANTALLA 2: GESTOR DE TAREAS CENTRALIZADO
 #----------------------------------------------------------------------
 else:
     # Cabecera superior
@@ -81,16 +81,25 @@ else:
     
     st.divider()
 
-    # Organización en dos pestañas principales
+    # --- CONSULTA CENTRALIZADA DE MIEMBROS ---
+    # Colocamos esto aquí arriba para que AMBAS pestañas conozcan la lista de familiares actualizada
+    resp_miembros = supabase.table("miembros").select("nombre").eq("codigo_familia", st.session_state.codigo_familia).execute()
+    lista_familiares_actual = ["Sin asignar"] + [m["nombre"] for m in resp_miembros.data]
+    lista_edicion = ["Selecciona...", "Sin asignar"] + [m["nombre"] for m in resp_miembros.data]
+
+    # Organización en pestañas principales
     tab_añadir, tab_ver = st.tabs(["➕ Añadir Tarea", "📋 Ver Tareas"])
 
     # ==========================================
-    # PESTAÑA 1: FORMULARIO DE CREACIÓN (SOLUCIONADO)
+    # PESTAÑA 1: FORMULARIO DE CREACIÓN (CON ASIGNACIÓN COMPLETA)
     # ==========================================
     with tab_añadir:
         st.subheader("Crear una nueva tarea")
         with st.form(key="formulario_tareas", clear_on_submit=True):
             nueva_tarea = st.text_input("¿Qué necesitamos hacer?")
+            
+            # NUEVO: Selector para asignar responsable desde el primer momento
+            quien_lo_hace = st.selectbox("👤 ¿Quién se encargará de esta tarea?", lista_familiares_actual)
             
             st.write("¿Quieres añadir límites de tiempo? (Modifica y marca la casilla para activarlos)")
             col_fecha, col_hora = st.columns(2)
@@ -100,7 +109,6 @@ else:
                 tiene_fecha = st.checkbox("📅 Activar y guardar esta fecha")
                 
             with col_hora:
-                # Ponemos un valor por defecto cómodo (las 12:00) por si acaso
                 hora_limite = st.time_input("Selecciona Hora", value=datetime.time(12, 0))
                 tiene_hora = st.checkbox("⏰ Activar y guardar esta hora")
                 
@@ -112,13 +120,14 @@ else:
                     datos_tarea = {
                         "descripcion": nueva_tarea,
                         "completada": False,
-                        "responsable": "Sin asignar", 
+                        "responsable": quien_lo_hace, # GUARDAMOS EL NOMBRE SELECCIONADO
                         "fecha": str(fecha_limite) if tiene_fecha else "Sin fecha", 
                         "hora": str(hora_limite) if tiene_hora else "Sin hora",
                         "codigo_familia": st.session_state.codigo_familia
                     }
                     supabase.table("tareas").insert(datos_tarea).execute()
-                    st.success("¡Tarea añadida correctamente! Ya puedes verla en la pestaña 'Ver Tareas'.")
+                    st.success(f"¡Tarea '{nueva_tarea}' asignada a {quien_lo_hace} con éxito!")
+                    st.rerun()
 
     # ==========================================
     # PESTAÑA 2: VISUALIZACIÓN Y FILTRADO
@@ -128,10 +137,7 @@ else:
         filtro = st.radio("Filtro de visualización:", ["Mostrar todas las tareas de la familia", "Solo las tareas que me tocan a mí"], horizontal=True)
         st.write("") 
 
-        # 2. Descargar datos de la nube
-        resp_miembros = supabase.table("miembros").select("nombre").eq("codigo_familia", st.session_state.codigo_familia).execute()
-        lista_familiares_actual = ["Selecciona...", "Sin asignar"] + [m["nombre"] for m in resp_miembros.data]
-
+        # 2. Descargar tareas de la nube
         respuesta = supabase.table("tareas").select("*").eq("codigo_familia", st.session_state.codigo_familia).execute()
         lista_tareas = respuesta.data
 
@@ -166,10 +172,10 @@ else:
                     n_desc = st.text_input("Editar descripción:", value=tarea["descripcion"], key=f"ed_{tarea['id']}")
                     
                     try:
-                        idx_resp = lista_familiares_actual.index(tarea["responsable"])
+                        idx_resp = lista_edicion.index(tarea["responsable"])
                     except ValueError:
                         idx_resp = 0
-                    n_resp = st.selectbox("Cambiar responsable:", lista_familiares_actual, index=idx_resp, key=f"er_{tarea['id']}")
+                    n_resp = st.selectbox("Cambiar responsable:", lista_edicion, index=idx_resp, key=f"er_{tarea['id']}")
                     
                     st.write("Ajustar límites de tiempo:")
                     col_ef, col_eh = st.columns(2)
