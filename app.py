@@ -2,6 +2,28 @@ import streamlit as st
 from supabase import create_client, Client
 import datetime
 
+# --- CONFIGURACIÓN DE LA PÁGINA ---
+# ⚠️ IMPORTANTE: set_page_config debe ser siempre el PRIMER comando de Streamlit
+st.set_page_config(page_title="LA ia.IA MODERNA", page_icon="🏠", layout="centered")
+
+# --- ENCABEZADO ESTÉTICO ---
+# Creamos dos columnas: una pequeña para el logo y otra grande para el título
+col_logo, col_titulo = st.columns([1, 4]) 
+
+with col_logo:
+    # Intenta cargar el logo. Si el archivo se llama distinto, cámbialo aquí abajo.
+    try:
+        st.image("logo.jpeg", use_column_width=True)
+    except:
+        st.warning("No se encuentra logo.jpeg")
+
+with col_titulo:
+    # Usamos HTML para darle estilo, color y quitar el espacio por defecto de Streamlit
+    st.markdown("<h1 style='color: #4F8BF9; padding-top: 0px; margin-bottom: 0px;'>LA ia.IA MODERNA</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 18px; color: gray; margin-top: 0px;'>Plataforma de organización familiar</p>", unsafe_allow_html=True)
+
+st.divider()
+
 # --- 1. CONEXIÓN A LA BASE DE DATOS ---
 @st.cache_resource
 def iniciar_conexion():
@@ -10,8 +32,6 @@ def iniciar_conexion():
     return create_client(url, key)
 
 supabase = iniciar_conexion()
-
-st.title("LA ia.IA MODERNA")
 
 # --- 2. MEMORIA DE SESIÓN ---
 if 'usuario_actual' not in st.session_state:
