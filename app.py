@@ -20,7 +20,7 @@ with col_logo:
 with col_titulo:
     # Usamos HTML para darle estilo, color y quitar el espacio por defecto de Streamlit
     st.markdown("<h1 style='color: #4F8BF9; padding-top: 0px; margin-bottom: 0px;'>LA ia.IA MODERNA</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='font-size: 18px; color: gray; margin-top: 0px;'>Plataforma de organización familiar</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 18px; color: gray; margin-top: 0px;'>Plataforma de organización familiar para el cuidado de mayores</p>", unsafe_allow_html=True)
 
 st.divider()
 
