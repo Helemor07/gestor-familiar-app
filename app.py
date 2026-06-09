@@ -69,7 +69,6 @@ if st.session_state.usuario_actual is None:
 # PANTALLA 2: GESTOR DE TAREAS CENTRALIZADO
 #----------------------------------------------------------------------
 else:
-    # Cabecera superior
     col_header1, col_header2 = st.columns([3, 1])
     with col_header1:
         st.write(f"¡Hola, **{st.session_state.usuario_actual}**! Sala: **{st.session_state.codigo_familia}**")
@@ -81,12 +80,10 @@ else:
     
     st.divider()
 
-    # --- CONSULTA CENTRALIZADA DE MIEMBROS ---
     resp_miembros = supabase.table("miembros").select("nombre").eq("codigo_familia", st.session_state.codigo_familia).execute()
     lista_familiares_actual = ["Sin asignar"] + [m["nombre"] for m in resp_miembros.data]
     lista_edicion = ["Selecciona...", "Sin asignar"] + [m["nombre"] for m in resp_miembros.data]
 
-    # Organización en pestañas principales
     tab_añadir, tab_ver = st.tabs(["➕ Añadir Tarea", "📋 Ver Tareas"])
 
     # ==========================================
@@ -124,8 +121,6 @@ else:
                         "codigo_familia": st.session_state.codigo_familia
                     }
                     supabase.table("tareas").insert(datos_tarea).execute()
-                    
-                    # AQUÍ ESTÁ LA MAGIA: st.success sin el st.rerun() después
                     st.success("¡La tarea ha sido guardada y se puede ver en la pestaña 'Ver Tareas'!")
 
     # ==========================================
@@ -202,10 +197,33 @@ else:
                             }
                             supabase.table("tareas").update(cambios).eq("id", tarea["id"]).execute()
                             st.rerun()
+                            
+                    # NUEVO: LÓGICA DE CONFIRMACIÓN DE BORRADO
                     with col_b2:
-                        if st.button("🗑️ Eliminar Tarea", key=f"bdel_{tarea['id']}", use_container_width=True):
-                            supabase.table("tareas").delete().eq("id", tarea["id"]).execute()
-                            st.rerun()
+                        confirm_key = f"confirmar_borrado_{tarea['id']}"
+                        
+                        # Si no existe la variable de confirmación para esta tarea, la creamos en False
+                        if confirm_key not in st.session_state:
+                            st.session_state[confirm_key] = False
+                            
+                        # Si está en False, mostramos el botón normal de Eliminar
+                        if not st.session_state[confirm_key]:
+                            if st.button("🗑️ Eliminar Tarea", key=f"bdel_{tarea['id']}", use_container_width=True):
+                                st.session_state[confirm_key] = True # Activamos el modo confirmación
+                                st.rerun()
+                        # Si está en True, mostramos la advertencia y los dos botones nuevos
+                        else:
+                            st.error("⚠️ ¿Borrar definitivamente?")
+                            col_yes, col_no = st.columns(2)
+                            with col_yes:
+                                if st.button("Sí", key=f"byes_{tarea['id']}", use_container_width=True):
+                                    supabase.table("tareas").delete().eq("id", tarea["id"]).execute()
+                                    st.session_state[confirm_key] = False # Reseteamos por limpieza
+                                    st.rerun()
+                            with col_no:
+                                if st.button("No", key=f"bno_{tarea['id']}", use_container_width=True):
+                                    st.session_state[confirm_key] = False # Cancelamos y volvemos al botón original
+                                    st.rerun()
                 st.divider()
 
         tareas_pendientes = [t for t in lista_tareas if not t["completada"]]
